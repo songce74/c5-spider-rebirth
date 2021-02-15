@@ -52,6 +52,7 @@ ROBOTSTXT_OBEY = True
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
    'c5spider.middlewares.C5SpiderProxyMiddleware': 543,
+   'c5spider.middlewares.CustomRetryMiddleware': 600,
 }
 
 # Enable or disable extensions
@@ -89,4 +90,5 @@ ITEM_PIPELINES = {
 
 DNS_TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 10
-RETRY_TIMES = 4
+RETRY_TIMES = 6
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 429, 403]

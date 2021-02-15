@@ -104,10 +104,11 @@ class C5SpiderDownloaderMiddleware:
     def spider_opened(self, spider):
         spider.logger.info('Spider opened: %s' % spider.name)
 
-class C5SpiderProxyMiddleware:
+class ProxyPool():
     def __init__(self):
         # 初始化代理池
         self.proxyQueue = Queue()
+        self.proxy = None
         with open('./Proxy.json') as json_file:
             proxy_json = json.load(json_file)
             for p in proxy_json:
@@ -120,8 +121,32 @@ class C5SpiderProxyMiddleware:
         self.proxy = self.proxyQueue.get()
         self.proxyQueue.put(self.proxy)
 
-    def 
+    def getProxyAddr(self):
+        return self.proxy
 
+# proxyPool = ProxyPool()
+
+class ProxyPoolString():
+    def __init__(self):
+        # 初始化代理池
+        self.proxyQueue = Queue()
+        self.proxy = None
+        with open('./Proxy.txt') as proxy_file:
+            for l in proxy_file:
+                self.proxyQueue.put(l)
+
+    def renewProxyAddr(self):
+        # 在地址池中拿去一个代理地址
+        self.proxy = self.proxyQueue.get()
+        self.proxyQueue.put(self.proxy)
+
+    def getProxyAddr(self):
+        return self.proxy
+
+proxyPoolString = ProxyPoolString()
+
+# 给Reqeust加代理middleware
+class C5SpiderProxyMiddleware:
     def process_request(self, request, spider):
         # meta key "changeProxy"： 标注是否需要更换proxy
         # meta key "proxy"： proxy地址
@@ -130,26 +155,26 @@ class C5SpiderProxyMiddleware:
             return request
         elif request.meta['changeProxy']:       # 需要更换代理情况，更换代理，重新处理请求
             print('更换代理访问' + request.url)
-            self.renewProxyAddr()
-            request.meta['proxy'] = self.proxy
+            proxyPoolString.renewProxyAddr()
+            request.meta['proxy'] = proxyPoolString.getProxyAddr()
             request.meta['changeProxy'] = False
             # return request
         else:                                   # 不需要更换代理情况，处理请求
             return None
     
-    def process_response(self, request, response, spider):
-        if 200 <= response.status < 300:                            # 正常情况，返回响应
-            return response
-        elif response.status == 429 or response.status == 403:      # too many request，需要更换代理
-            request.meta['changeProxy'] = True
-            return request
-        else:
-            raise exceptions.NotSupported(f'Not handled response, res code:{response.status}')
+    # def process_response(self, request, response, spider):
+    #     if 200 <= response.status < 300:                            # 正常情况，返回响应
+    #         return response
+        # elif response.status == 429 or response.status == 403:      # too many request，需要更换代理
+        #     request.meta['changeProxy'] = True
+        #     return request
+        # else:
+        #     raise exceptions.NotSupported(f'Not handled response, res code:{response.status}')
 
 from scrapy.downloadermiddlewares.retry import RetryMiddleware
 from scrapy.utils.response import response_status_message
 
-
+# 给Retry换代理middleware
 class CustomRetryMiddleware(RetryMiddleware):
     def process_response(self, request, response, spider):
     
@@ -157,9 +182,12 @@ class CustomRetryMiddleware(RetryMiddleware):
             return response
         if response.status in self.retry_http_codes:
             reason = response_status_message(response.status)
-            #如果返回了[500, 502, 503, 504, 522, 524, 408]这些code，换个proxy试试
-            proxy = random.choice(proxy_list)
-            request.meta['proxy'] = proxy
+            #如果返回了[403, 500, 502, 503, 504, 522, 524, 408, 429]这些code，换个proxy试试
+            print('更换代理访问(timeout)' + request.url)
+            proxyPoolString.renewProxyAddr()
+            request.meta['proxy'] = proxyPoolString.getProxyAddr()
+            request.meta['changeProxy'] = False
+
             return self._retry(request, reason, spider) or response
             
         return response
@@ -172,8 +200,11 @@ class CustomRetryMiddleware(RetryMiddleware):
     def process_exception(self, request, exception, spider):
         if isinstance(exception, self.EXCEPTIONS_TO_RETRY) and not request.meta.get('dont_retry', False):
             #这里可以写出现异常那些你的处理            
-            proxy = random.choice(proxy_list)
-            request.meta['proxy'] = proxy
+            print('更换代理访问(timeout)' + request.url)
+            proxyPoolString.renewProxyAddr()
+            request.meta['proxy'] = proxyPoolString.getProxyAddr()
+            request.meta['changeProxy'] = False
+
             return self._retry(request, exception, spider)
     #_retry是RetryMiddleware中的一个私有方法，主要作用是
     #1.对request.meta中的retry_time进行+1 

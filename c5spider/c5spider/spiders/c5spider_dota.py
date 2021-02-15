@@ -64,7 +64,11 @@ class C5SpiderDota(scrapy.Spider):
             if max_price is not None:
                 url += f'max={max_price}&'
             
-            yield scrapy.Request(url=url, callback=self.parse, meta = {'changeProxy': False})
+            yield scrapy.Request(url=url, 
+                callback=self.parse, 
+                meta = {'changeProxy': False},
+                dont_filter = True
+                )
         else:
             self.log('登录失败')
 
@@ -80,13 +84,23 @@ class C5SpiderDota(scrapy.Spider):
             c5itemPageUrl = item.xpath('.//a/@href').extract_first()
             c5itemPageUrl = response.urljoin(c5itemPageUrl)
             c5_item['c5page'] = c5itemPageUrl
-            yield scrapy.Request(c5itemPageUrl, meta={'c5_item':c5_item, 'changeProxy': False}, callback=self.c5ItemParse)
+            yield scrapy.Request(c5itemPageUrl, 
+                meta={
+                    'c5_item':c5_item, 
+                    'changeProxy': False
+                },
+                callback=self.c5ItemParse,
+                dont_filter = True
+                )
 
         # 获取下一页地址
-        # next_page = response.xpath("//li[@class='next']/a/@href").extract_first()
-        # if next_page is not None:
-        #     next_page = response.urljoin(next_page)
-        #     yield scrapy.Request(next_page, callback=self.parse)
+        next_page = response.xpath("//li[@class='next']/a/@href").extract_first()
+        if next_page is not None:
+            next_page = response.urljoin(next_page)
+            yield scrapy.Request(next_page, callback=self.parse, 
+                meta={'changeProxy': False },
+                dont_filter = True
+            )
 
     def c5ItemParse(self,response):
         c5_item = response.request.meta['c5_item']
@@ -101,14 +115,15 @@ class C5SpiderDota(scrapy.Spider):
             steamLookupPage = 'https://steamcommunity.com/market/priceoverview/?' +\
                         f'appid={appid}&' + f'currency={currency}&' +\
                         f'market_hash_name={market_hash_name}'
-            yield scrapy.Request(steamLookupPage, meta={'c5_item':c5_item, 'changeProxy': True}, \
+            yield scrapy.Request(steamLookupPage, meta={'c5_item':c5_item, 'changeProxy': False}, \
                      callback=self.steamPriceParse, dont_filter = True)
 
     def steamPriceParse(self, response):
         # 从steam api里面提取最低售价
         # 请求太多会触发 429 Too Many Requests
         c5_item = response.request.meta['c5_item']
-        res = response.text
-        lowest_price = json.loads(res)['lowest_price']
-        c5_item['steamLeastSelling'] = lowest_price.replace('¥', '').strip() #最低售价
-        yield c5_item
+        if response.status == 200:
+            res = response.text
+            lowest_price = json.loads(res)['lowest_price']
+            c5_item['steamLeastSelling'] = lowest_price.replace('¥', '').strip() #最低售价
+            yield c5_item
