@@ -27,12 +27,13 @@ class PriceAnalyzer():
         self.sorted_result = sorted(self.result_hash_name_list, key = lambda x:x['ratio'])
 
     def getNumResult(self, num):
+        print(f'共分析了{len(self.sorted_result)}件商品')
         for item in self.sorted_result[:num]:
             output_item = self.price_list[item['num']]
             print(f"物品：{output_item['name']} 平台售价：{output_item['price']} 比例：{item['ratio']:.2f} 链接：{output_item['c5page']}")
 
-analyzer = PriceAnalyzer('2021-02-11-11-43-29-c5items.json')
+analyzer = PriceAnalyzer('2021-02-23-18-35-36-c5items.json')
 analyzer.analyze()
-analyzer.getNumResult(10)
+analyzer.getNumResult(20)
 
 
